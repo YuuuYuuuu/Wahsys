@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: oklch(0.98 0.006 250);
+  --color-foreground: oklch(0.2 0.03 260);
+  --color-card: oklch(1 0 0);
+  --color-card-foreground: oklch(0.2 0.03 260);
+  --color-primary: oklch(0.34 0.1 262);
+  --color-primary-foreground: oklch(0.99 0 0);
+  --color-secondary: oklch(0.95 0.02 255);
+  --color-secondary-foreground: oklch(0.26 0.04 260);
+  --color-muted: oklch(0.955 0.012 255);
+  --color-muted-foreground: oklch(0.46 0.03 260);
+  --color-accent: oklch(0.93 0.04 255);
+  --color-accent-foreground: oklch(0.22 0.04 260);
+  --color-destructive: oklch(0.55 0.2 25);
+  --color-border: oklch(0.9 0.015 255);
+  --color-input: oklch(0.9 0.015 255);
+  --radius: 0.5rem;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    background-image: radial-gradient(ellipse 120% 80% at 100% -20%, oklch(0.92 0.04 262 / 0.35), transparent),
+      radial-gradient(ellipse 80% 60% at 0% 100%, oklch(0.94 0.03 200 / 0.25), transparent);
+    background-attachment: fixed;
+  }
+}
+
+/* Smooth organic floating animations */
+@keyframes float-slow {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes float-badge-top {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-7px) rotate(0.6deg);
+  }
+}
+
+@keyframes float-badge-bottom {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(6px) rotate(-0.6deg);
+  }
+}
+
+.animate-float-slow {
+  animation: float-slow 7s ease-in-out infinite;
+  will-change: transform;
+}
+
+.animate-float-top {
+  animation: float-badge-top 4.8s ease-in-out infinite;
+  will-change: transform;
+}
+
+.animate-float-bottom {
+  animation: float-badge-bottom 5.6s ease-in-out infinite 0.7s;
+  will-change: transform;
+}
+
+/* Utilities for mobile devices */
+@utility no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility pb-safe {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0.75rem));
+}

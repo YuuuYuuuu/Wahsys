@@ -1,0 +1,504 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  PETUGAS
+}
+
+enum ItemCondition {
+  BAIK
+  PERLU_PERBAIKAN
+  RUSAK
+}
+
+enum ItemKind {
+  ASET
+  NON_ASET
+}
+
+enum LoanPolicy {
+  LOANABLE
+  NOT_LOANABLE
+}
+
+enum LoanStatus {
+  MENUNGGU_KONFIRMASI
+  DIPINJAM
+  DIKEMBALIKAN
+  MENUNGGU_PERSETUJUAN
+  DITOLAK
+}
+
+enum OvertimeRequestStatus {
+  DRAFT
+  MENUNGGU
+  DISETUJUI
+  DITOLAK
+}
+
+enum OrgRole {
+  KEPALA_SEKSI
+  STAFF
+}
+
+enum StaffUnit {
+  IT
+  HUMAS
+  AKADEMIK
+  SUPPORT
+}
+
+enum PerformancePeriodType {
+  DAILY
+  WEEKLY
+}
+
+enum PerformanceReportStatus {
+  DRAFT
+  SUBMITTED
+  REVIEWED
+}
+
+enum LostReportStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  NEED_MORE_INFO
+  PUBLISHED
+  MATCH_FOUND
+  RESOLVED
+  REJECTED
+  CANCELLED
+  EXPIRED
+}
+
+enum FoundItemStatus {
+  PENDING_RECEIPT
+  RECEIVED
+  AVAILABLE
+  CLAIM_PENDING
+  RESERVED
+  RETURNED
+  UNCLAIMED
+  DISPOSED
+  EXPIRED
+}
+
+enum ClaimStatus {
+  SUBMITTED
+  PENDING_REVIEW
+  NEED_MORE_INFO
+  APPROVED
+  REJECTED
+  CANCELLED
+  COMPLETED
+}
+
+enum HandoverStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum ReceiptStatus {
+  PENDING
+  RECEIVED
+  NOT_RECEIVED
+}
+
+enum MatchStatus {
+  POTENTIAL
+  CONFIRMED
+  DISMISSED
+}
+
+model User {
+  id               String     @id @default(uuid())
+  name             String
+  email            String     @unique
+  password         String
+  role             Role       @default(PETUGAS)
+  orgRole          OrgRole?
+  unit             StaffUnit?
+  supervisorId     String?
+  supervisor       User?      @relation("UserSupervisor", fields: [supervisorId], references: [id], onDelete: SetNull)
+  directReports    User[]     @relation("UserSupervisor")
+  accountApproved  Boolean    @default(true)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  loans              Loan[]
+  auditLogs          AuditLog[]
+  credentials        Credential[]
+  refreshTokens      RefreshToken[]
+  overtimeRequests  OvertimeRequest[] @relation("OvertimeSubmittedBy")
+  overtimeDecisions OvertimeRequest[] @relation("OvertimeDecidedBy")
+  performanceReports      PerformanceReport[] @relation("PerformanceReportAuthor")
+  performanceReviews      PerformanceReport[] @relation("PerformanceReportReviewer")
+  lostReports             LostReport[]        @relation("LostReports")
+  foundReports            FoundReport[]       @relation("FoundReports")
+  foundItemsReceived      FoundItem[]         @relation("FoundItemsReceived")
+  claims                  Claim[]             @relation("UserClaims")
+  claimsReviewed          Claim[]             @relation("ClaimsReviewed")
+  handoversReceived       Handover[]          @relation("HandoverRecipient")
+  handoversProcessed      Handover[]          @relation("HandoverAdmin")
+
+  @@index([supervisorId])
+  @@index([orgRole])
+}
+
+model PerformanceReport {
+  id            String                   @id @default(uuid())
+  authorId      String
+  author        User                     @relation("PerformanceReportAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  periodType    PerformancePeriodType
+  periodStart   DateTime                 @db.Date
+  periodEnd     DateTime                 @db.Date
+  activities    String                   @db.Text
+  blockers      String?                  @db.Text
+  notes         String?                  @db.Text
+  status        PerformanceReportStatus  @default(DRAFT)
+  reviewedById  String?
+  reviewedBy    User?                    @relation("PerformanceReportReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt    DateTime?
+  reviewerNote  String?                  @db.Text
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
+
+  @@unique([authorId, periodType, periodStart])
+  @@index([status])
+  @@index([periodStart])
+  @@index([reviewedById])
+}
+
+model RefreshToken {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  replacedBy String?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model Category {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  loanPolicy LoanPolicy @default(LOANABLE)
+  createdAt DateTime @default(now())
+
+  items Item[]
+}
+
+model Item {
+  id          String        @id @default(uuid())
+  assetCode   String?       @unique
+  externalAssetCode String? @unique
+  externalQrValue   String? @unique
+  externalQrImageUrl String?
+  name        String
+  kind        ItemKind      @default(NON_ASET)
+  categoryId  String
+  category    Category      @relation(fields: [categoryId], references: [id])
+  stock       Int
+  location    String
+  condition   ItemCondition @default(BAIK)
+  description String?
+  imageUrl    String?
+  imageUrls   Json?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  loans           Loan[]
+  conditionLogs   ItemConditionLog[]
+  maintenanceLogs MaintenanceLog[]
+
+  @@index([externalAssetCode])
+  @@index([externalQrValue])
+}
+
+model ItemConditionLog {
+  id           String        @id @default(uuid())
+  itemId       String
+  item         Item          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  oldCondition ItemCondition
+  newCondition ItemCondition
+  note         String?
+  changedAt    DateTime      @default(now())
+}
+
+model MaintenanceLog {
+  id          String   @id @default(uuid())
+  itemId      String
+  item        Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  description String
+  cost        Float?
+  performedAt DateTime @default(now())
+}
+
+model Loan {
+  id                      String     @id @default(uuid())
+  itemId                  String
+  item                    Item       @relation(fields: [itemId], references: [id])
+  userId                  String?
+  user                    User?      @relation(fields: [userId], references: [id])
+  borrowerName            String
+  borrowerEmail           String?
+  borrowerPhone           String?
+  quantity                Int
+  loanDate                DateTime
+  dueDate                 DateTime?
+  returnDate              DateTime?
+  location                String
+  status                  LoanStatus @default(DIPINJAM)
+  confirmationToken       String?    @unique
+  confirmationExpiresAt   DateTime?
+  confirmedAt             DateTime?
+  reminderSentAt          DateTime?
+  createdAt               DateTime   @default(now())
+}
+
+model Credential {
+  id            String   @id @default(uuid())
+  title         String
+  username      String?
+  encryptedData String
+  iv            String
+  salt          String
+  category      String?
+  createdById   String
+  createdBy     User     @relation(fields: [createdById], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  files CredentialFile[]
+}
+
+model CredentialFile {
+  id           String     @id @default(uuid())
+  credentialId String
+  credential   Credential @relation(fields: [credentialId], references: [id], onDelete: Cascade)
+  fileName     String
+  fileUrl      String
+  fileType     String
+  fileSize     Int
+  iv           String?
+  uploadedAt   DateTime   @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  action     String
+  resource   String
+  metadata   Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model SmtpSettings {
+  id           String   @id @default(uuid())
+  host         String   @default("")
+  port         Int      @default(587)
+  secure       Boolean  @default(false)
+  authUser     String   @default("")
+  authPassword String   @default("")
+  fromEmail    String   @default("")
+  fromName     String   @default("WahSys")
+  updatedAt    DateTime @updatedAt
+}
+
+model EmailTemplate {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  name      String
+  subject   String   @db.VarChar(500)
+  bodyHtml  String   @db.LongText
+  updatedAt DateTime @updatedAt
+}
+
+model AppSetting {
+  key   String @id
+  value String @db.Text
+}
+
+model OvertimeRequest {
+  id             String                  @id @default(uuid())
+  userId         String
+  user           User                    @relation("OvertimeSubmittedBy", fields: [userId], references: [id], onDelete: Cascade)
+  status         OvertimeRequestStatus   @default(DRAFT)
+  formSnapshot   Json
+  decidedAt      DateTime?
+  decidedById    String?
+  decidedBy      User?                   @relation("OvertimeDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model LostReport {
+  id              String           @id @default(uuid())
+  ticketNumber    String           @unique
+  userId          String
+  user            User             @relation("LostReports", fields: [userId], references: [id], onDelete: Cascade)
+  itemName        String
+  category        String
+  description     String           @db.Text
+  lastLocation    String
+  lostDate        DateTime
+  imageUrl        String?
+  additionalNotes String?          @db.Text
+  status          LostReportStatus @default(SUBMITTED)
+  rejectionReason String?          @db.Text
+  resolvedAt      DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  matches         ItemMatch[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([category])
+  @@index([lostDate])
+}
+
+model FoundReport {
+  id                 String        @id @default(uuid())
+  ticketNumber       String        @unique
+  finderId           String?
+  finder             User?         @relation("FoundReports", fields: [finderId], references: [id], onDelete: SetNull)
+  finderName         String?
+  finderContact      String?
+  itemName           String
+  category           String
+  publicDescription  String        @db.Text
+  privateDescription String?       @db.Text
+  foundLocation      String
+  foundDate          DateTime
+  expiredAt          DateTime?
+  imageUrl           String?
+  receiptStatus      ReceiptStatus @default(PENDING)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  foundItem          FoundItem?
+
+  @@index([finderId])
+  @@index([receiptStatus])
+  @@index([foundDate])
+}
+
+model FoundItem {
+  id                 String          @id @default(uuid())
+  itemCode           String          @unique
+  foundReportId      String?         @unique
+  foundReport        FoundReport?    @relation(fields: [foundReportId], references: [id], onDelete: SetNull)
+  itemName           String
+  category           String
+  publicDescription  String          @db.Text
+  privateDescription String?         @db.Text
+  foundLocation      String
+  foundDate          DateTime
+  storageLocation    String
+  condition          String
+  imageUrl           String?
+  status             FoundItemStatus @default(AVAILABLE)
+  receivedById       String?
+  receivedBy         User?           @relation("FoundItemsReceived", fields: [receivedById], references: [id], onDelete: SetNull)
+  receivedAt         DateTime        @default(now())
+  returnedAt         DateTime?
+  expiredAt          DateTime?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  claims             Claim[]
+  matches            ItemMatch[]
+
+  @@index([status])
+  @@index([category])
+  @@index([receivedById])
+  @@index([foundDate])
+  @@index([expiredAt])
+}
+
+model Claim {
+  id                   String      @id @default(uuid())
+  claimNumber          String      @unique
+  foundItemId          String
+  foundItem            FoundItem   @relation(fields: [foundItemId], references: [id], onDelete: Cascade)
+  claimantId           String
+  claimant             User        @relation("UserClaims", fields: [claimantId], references: [id], onDelete: Cascade)
+  ownershipDescription String      @db.Text
+  evidencePhotos       Json?
+  status               ClaimStatus @default(SUBMITTED)
+  reviewedById         String?
+  reviewedBy           User?       @relation("ClaimsReviewed", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt           DateTime?
+  rejectionReason      String?     @db.Text
+  reviewerNotes        String?     @db.Text
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  handover             Handover?
+
+  @@index([foundItemId])
+  @@index([claimantId])
+  @@index([status])
+  @@index([reviewedById])
+}
+
+model Handover {
+  id             String         @id @default(uuid())
+  handoverNumber String         @unique
+  claimId        String         @unique
+  claim          Claim          @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  recipientId    String
+  recipient      User           @relation("HandoverRecipient", fields: [recipientId], references: [id])
+  adminId        String
+  admin          User           @relation("HandoverAdmin", fields: [adminId], references: [id])
+  scheduledAt    DateTime?
+  pickupLocation String?
+  handoverAt     DateTime?
+  proofPhotoUrl  String?
+  notes          String?        @db.Text
+  status         HandoverStatus @default(SCHEDULED)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([recipientId])
+  @@index([adminId])
+  @@index([status])
+}
+
+model ItemMatch {
+  id           String      @id @default(uuid())
+  lostReportId String
+  lostReport   LostReport  @relation(fields: [lostReportId], references: [id], onDelete: Cascade)
+  foundItemId  String
+  foundItem    FoundItem   @relation(fields: [foundItemId], references: [id], onDelete: Cascade)
+  matchScore   Float
+  matchStatus  MatchStatus @default(POTENTIAL)
+  createdAt    DateTime    @default(now())
+
+  @@unique([lostReportId, foundItemId])
+  @@index([lostReportId])
+  @@index([foundItemId])
+  @@index([matchStatus])
+}
